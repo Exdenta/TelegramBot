@@ -18,14 +18,17 @@ vk_session = None
 
 # ============================ /start ============================ #
 
+help_text = """
+            Бот работает с ВКонтакте API.\n
+            /audio - поиск музыки\n
+            /document - поиск документов\n
+            /generate - генерирование текста\n
+            """
+
 # /start command
 def start(update: Update, _: CallbackContext) -> None:
     """Сообщает пользователю о возможностях бота"""
-    update.message.reply_text(
-        "Бот работает с ВКонтакте API.\n "
-        "/audio - поиск музыки\n "
-        "/document - поиск документов "
-    )
+    update.message.reply_text(help_text)
 
 
 # ============================ /audio ============================ #
@@ -128,6 +131,107 @@ def show_documents(update: Update, _: CallbackContext) -> int:
     return ConversationHandler.END
 
 
+# ============================ /generate ============================ #
+
+from transformers import GPT2LMHeadModel, GPT2Tokenizer
+import torch
+import copy
+
+# Состояния беседы с ботом при генерировании текста
+GENERATE_TEXT_TOPIC = 0
+
+
+def load_tokenizer_and_model(model_name_or_path):
+    return (
+        GPT2Tokenizer.from_pretrained(model_name_or_path),
+        GPT2LMHeadModel.from_pretrained(model_name_or_path).cuda(),
+    )
+
+
+# модель, которая генерирует текст
+tokenizer, model = load_tokenizer_and_model("sberbank-ai/rugpt3large_based_on_gpt2")
+
+
+# to make the generated texts better, we remove "bad" tokens from the model, some junk symbols such as html tags, links etc.
+
+bad_word_ids = [
+    [203],  # \n
+    [225],  # weird space 1
+    [28664],  # weird space 2
+    [13298],  # weird space 3
+    [206],  # \r
+    [49120],  # html
+    [25872],  # http
+    [3886],  # amp
+    [38512],  # nbsp
+    [10],  # &
+    [5436],  # & (another)
+    [5861],  # http
+    [372],  # yet another line break
+    [421, 4395],  # МСК
+    [64],  # \
+    [33077],  # https
+    [1572],  # ru
+    [11101],  # Источник
+]
+
+
+def gen_fragment(
+    context,
+    bad_word_ids=bad_word_ids,
+    print_debug_output=False,
+    temperature=1.0,
+    max_length=75,
+    min_length=50,
+):
+    input_ids = tokenizer.encode(
+        context, add_special_tokens=False, return_tensors="pt"
+    ).to("cuda")
+    input_ids = input_ids[:, -1700:]
+    input_size = input_ids.size(1)
+    output_sequences = model.generate(
+        input_ids=input_ids,
+        max_length=max_length + input_size,
+        min_length=min_length + input_size,
+        top_p=0.95,
+        do_sample=True,
+        num_return_sequences=1,
+        temperature=1.0,
+        pad_token_id=0,
+        eos_token_id=2,
+        bad_words_ids=bad_word_ids,
+        no_repeat_ngram_size=6,
+    )
+    if len(output_sequences.shape) > 2:
+        output_sequences.squeeze_()
+    generated_sequence = output_sequences[0].tolist()[input_size:]
+    if print_debug_output:
+        for idx in generated_sequence:
+            print(
+                idx, tokenizer.decode([idx], clean_up_tokenization_spaces=True).strip()
+            )
+    text = tokenizer.decode(generated_sequence, clean_up_tokenization_spaces=True)
+    text = text[: text.find("</s>")]
+    text = text[: text.rfind(".") + 1]
+    return context + text
+
+
+# /generate command
+def generate(update: Update, _: CallbackContext) -> int:
+    """Генерирование текста"""
+    update.message.reply_text("Введите тему для текста или /cancel : ")
+
+    return GENERATE_TEXT_TOPIC
+
+
+def generate_text(update: Update, _: CallbackContext) -> int:
+    """Вызывается когда пользователь ввел название темы для текста"""
+    query = update.message.text
+    text = gen_fragment(query, temperature=1.0, max_length=40)
+    update.message.reply_text(text)
+    return ConversationHandler.END
+
+
 # ============================ /cancel ============================ #
 
 # /cancel command
@@ -143,11 +247,7 @@ def cancel(update: Update, _: CallbackContext) -> int:
 
 def help(update: Update, _: CallbackContext) -> None:
     """Отображает доступные комманды"""
-    update.message.reply_text(
-        "Бот работает с ВКонтакте API. "
-        "/audio - поиск музыки"
-        "/document - поиск документов"
-    )
+    update.message.reply_text(help_text)
 
 
 # ============================ MAIN ============================ #
@@ -179,10 +279,22 @@ def main(telegram_token) -> None:
         fallbacks=[CommandHandler("cancel", cancel)],
     )
 
+    # Генерирование текста GPT-3 /generate
+    generate_text_handler = ConversationHandler(
+        entry_points=[CommandHandler("generate", generate)],
+        states={
+            GENERATE_TEXT_TOPIC: [
+                MessageHandler(Filters.text & ~Filters.command, generate_text),
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+
     # Добавляем команды в диспетчер
     dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(audio_search_handler)
     dispatcher.add_handler(document_search_handler)
+    dispatcher.add_handler(generate_text_handler)
     dispatcher.add_handler(CommandHandler("help", help))
 
     # Запуск бота
