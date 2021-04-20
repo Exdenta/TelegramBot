@@ -11,9 +11,9 @@ env\Scripts\activate
 pip install -r requirement.txt
 ```
 
-## 2. Генерирование текста (при наличии ввидеокарты NVIDIA)
+## 2. Опционально. Генерирование текста
 
-### 2.1 Установка CUDA и cuDNN
+### 2.1 Установка CUDA и cuDNN (при наличии ввидеокарты NVIDIA)
 
 Установить CUDA v10.1 - https://developer.nvidia.com/cuda-10.1-download-archive-base
 Скачать и установить cuDNN v7.6 для CUDA v10.1 - https://developer.nvidia.com/rdp/cudnn-archive

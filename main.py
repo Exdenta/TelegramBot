@@ -19,10 +19,10 @@ vk_session = None
 # ============================ /start ============================ #
 
 help_text = """
-            Бот работает с ВКонтакте API.\n
-            /audio - поиск музыки\n
-            /document - поиск документов\n
-            /generate - генерирование текста\n
+            Бот работает с ВКонтакте API.
+            /audio - поиск музыки
+            /document - поиск документов
+            /generate - генерирование текста
             """
 
 # /start command
@@ -40,6 +40,7 @@ AUDIO_NAME = 0
 def audio(update: Update, _: CallbackContext) -> int:
     """Поиск и скачивание музыки"""
     update.message.reply_text("Введите название трека или /cancel : ")
+
     return AUDIO_NAME
 
 
@@ -151,9 +152,7 @@ def load_tokenizer_and_model(model_name_or_path):
 # модель, которая генерирует текст
 tokenizer, model = load_tokenizer_and_model("sberbank-ai/rugpt3large_based_on_gpt2")
 
-
 # to make the generated texts better, we remove "bad" tokens from the model, some junk symbols such as html tags, links etc.
-
 bad_word_ids = [
     [203],  # \n
     [225],  # weird space 1
@@ -306,8 +305,8 @@ def main(telegram_token) -> None:
 
 if __name__ == "__main__":
 
-    # vk_login = input("Введите логин ВКонтакте (+7xxxxxxxxxx): ")
-    vk_login = "+79099392858"  ############################################################### TODO: Delete !
+    vk_login = input("Введите логин ВКонтакте (+7xxxxxxxxxx): ")
+
     # Права доступа https://vk.com/dev/permissions
     vk_session = vk_api.VkApi(vk_login, "", scope="docs,audio")
     try:
@@ -322,5 +321,6 @@ if __name__ == "__main__":
         vk_session = vk_api.VkApi(vk_login, vk_password)
         vk_session.auth()
 
-    telegram_token = "1724864470:AAGWvuVwHZUS9TDx85N_6rayPac8wktx4Zo"
+    # Токен необходимо сгенерировать у отца ботов https://t.me/botfather
+    telegram_token = "TOKEN"
     main(telegram_token)
